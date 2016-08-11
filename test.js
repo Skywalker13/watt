@@ -476,3 +476,45 @@ test('rethrow error', (t) => {
     t.equal(err.message, 'a and b', 'catch rethrown error')
   })
 })
+
+test('promise chaining', (t) => {
+  t.plan(4)
+
+  var promise1 = watt(function * (mustThrow) {
+    if (mustThrow) throw new Error('reject:promise1')
+    return 'resolve:promise1'
+  })
+
+  var promise2 = watt(function * (mustThrow) {
+    if (mustThrow) throw new Error('reject:promise2')
+    return 'resolve:promise2'
+  })
+
+  promise1(false)
+    .then(() => promise2(false))
+    .then((v) => {
+      t.equal(v, 'resolve:promise2', 'second promise must resolve')
+    })
+    .catch(t.error)
+
+  promise1(true)
+    .then(() => promise2(false))
+    .then(t.error)
+    .catch((e) => {
+      t.equal(e.message, 'reject:promise1', 'first promise must reject')
+    })
+
+  promise1(false)
+    .then(() => promise2(true))
+    .then(t.error)
+    .catch((e) => {
+      t.equal(e.message, 'reject:promise2', 'second promise must reject')
+    })
+
+  promise1(true)
+    .then(() => promise2(true))
+    .then(t.error)
+    .catch((e) => {
+      t.equal(e.message, 'reject:promise1', 'first promise must reject')
+    })
+})

@@ -92,8 +92,36 @@ Watt.prototype.run = function (cb) {
   if (cb) {
     this._cb = cb
   } else if (!this._cb) {
+    // hack to check if the consumer is checking for rejections
+    var handlingReject = false
+
+    // Promise inherit, thanks to
+    // http://ibnrubaxa.blogspot.ch/2014/07/how-to-inherit-native-promise.html
+    var WattPromise = function (executor) {
+      var promise = new Promise(executor)
+      Object.setPrototypeOf(promise, Object.getPrototypeOf(this))
+      return promise
+    }
+    WattPromise.prototype = Object.create(Promise.prototype, {
+      constructor: {
+        value: WattPromise
+      }
+    })
+    WattPromise.prototype.catch = function (onRejected) {
+      if (onRejected) handlingReject = true
+      return Promise.prototype.catch.call(this, onRejected)
+    }
+    WattPromise.prototype.then = function (onFulfilled, onRejected) {
+      if (onRejected) handlingReject = true
+      return Promise.prototype.then.call(this, onFulfilled, onRejected)
+    }
+    WattPromise.all = Promise.all
+    WattPromise.cast = Promise.cast
+    WattPromise.reject = Promise.reject
+    WattPromise.resolve = Promise.resolve
+
     // if no cb is specified, return a Promise instead
-    this._promise = new Promise((resolve, reject) => {
+    this._promise = new WattPromise((resolve, reject) => {
       this._cb = (err, res) => {
         if (err) {
           if (!handlingReject) {
@@ -111,18 +139,6 @@ Watt.prototype.run = function (cb) {
       }
       this.next()
     })
-    // hack to check if the consumer is checking for rejections
-    var handlingReject = false
-    var then = this._promise.then.bind(this._promise)
-    var _catch = this._promise.catch.bind(this._promise)
-    this._promise.then = (onFulfilled, onRejected) => {
-      if (onRejected) handlingReject = true
-      then(onFulfilled, onRejected)
-    }
-    this._promise.catch = (onRejected) => {
-      if (onRejected) handlingReject = true
-      _catch(onRejected)
-    }
     return this._promise
   }
   this.next()
